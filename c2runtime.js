@@ -18512,6 +18512,203 @@ cr.plugins_.Browser = function(runtime)
 	};
 	pluginProto.exps = new Exps();
 }());
+/**
+ * Object holder for the plugin
+ */
+cr.plugins_.Cocoon_Canvasplus = function(runtime) {
+    this.runtime = runtime;
+};
+/**
+ * C2 plugin
+ */
+(function() {
+    var dialog = "";
+    var input_text = "";
+    var capture_screen_sync = "";
+    var capture_screen_async = "";
+    var device_info = "";
+    var pluginProto = cr.plugins_.Cocoon_Canvasplus.prototype;
+    pluginProto.Type = function(plugin) {
+        this.plugin = plugin;
+        this.runtime = plugin.runtime;
+    };
+    var typeProto = pluginProto.Type.prototype;
+    typeProto.onCreate = function() {};
+    /**
+     * C2 specific behaviour
+     */
+    pluginProto.Instance = function(type) {
+        this.type = type;
+        this.runtime = type.runtime;
+    };
+    var instanceProto = pluginProto.Instance.prototype;
+    var self;
+    instanceProto.onCreate = function() {
+        if (!(this.runtime.isAndroid || this.runtime.isiOS))
+            return;
+        if (typeof Cocoon == 'undefined')
+            return;
+        self = this;
+    };
+    function Cnds() {};
+    /**
+     * Cocoon Basic conditions
+     */
+    Cnds.prototype.isCanvasPlus = function() {
+        return this.runtime.isCocoonJs;
+    };
+    Cnds.prototype.onKeyboardCancel = function() {
+        return true;
+    };
+    Cnds.prototype.onKeyboardSuccess = function() {
+        return true;
+    };
+    Cnds.prototype.onConfirmCancel = function() {
+        return true;
+    };
+    Cnds.prototype.onConfirmSuccess = function() {
+        return true;
+    };
+    pluginProto.cnds = new Cnds();
+    /**
+     * Plugin actions
+     */
+    function Acts() {};
+    Acts.prototype.promptKeyboard = function(title_, message_, initial_, type_, canceltext_, oktext_) {
+        if (!this.runtime.isCocoonJs)
+            return;
+        var typestr = ["text", "num", "phone", "email", "url"][type_];
+        Cocoon.Dialog.prompt({
+            title: title_,
+            message: message_,
+            text: initial_,
+            type: typestr,
+            cancelText: canceltext_,
+            confirmText: oktext_
+        }, {
+            success: function(text) {
+                input_text = text;
+                self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onKeyboardSuccess, self);
+            },
+            cancel: function() {
+                self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onKeyboardCancel, self);
+            }
+        });
+    };
+    Acts.prototype.confirmDialog = function(title_, message_, canceltext_, oktext_) {
+        if (!this.runtime.isCocoonJs)
+            return;
+        Cocoon.Dialog.confirm({
+            title: title_,
+            message: message_,
+            cancelText: canceltext_,
+            confirmText: oktext_
+        }, function(accepted) {
+            if (accepted) {
+                self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onConfirmSuccess, self);
+            } else {
+                self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onConfirmCancel, self);
+            }
+        });
+    };
+    Acts.prototype.openURL = function(url_) {
+        Cocoon.App.openURL(url_);
+    };
+    Acts.prototype.exitApp = function() {
+        Cocoon.App.exit();
+    };
+    Acts.prototype.pauseApp = function() {
+        Cocoon.App.pause();
+    };
+    Acts.prototype.resumeApp = function() {
+        Cocoon.App.resume();
+    };
+    Acts.prototype.captureScreenSync = function(filename_, storage_, capture_) {
+        if (!this.runtime.isCocoonJs)
+            return;
+        var storage_type = ["APP_STORAGE", "INTERNAL_STORAGE", "EXTERNAL_STORAGE", "TEMPORARY_STORAGE"][storage_];
+        var gallery = false;
+        capture_screen_sync = Cocoon.Utils.captureScreen(filename_, storage_type, capture_, gallery);
+    };
+    Acts.prototype.captureScreenAsync = function(filename_, storage_, capture_) {
+        if (!this.runtime.isCocoonJs)
+            return;
+        var storage_type = ["APP_STORAGE", "INTERNAL_STORAGE", "EXTERNAL_STORAGE", "TEMPORARY_STORAGE"][storage_];
+        var gallery = false;
+        Cocoon.Utils.captureScreenAsync(filename_, storage_type, capture_, gallery, function(url, error) {
+            if (error) {
+                self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onCaptureScreenAsyncFail, self);
+            } else {
+                capture_screen_async = url;
+                self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onCaptureScreenAsyncSuccess, self);
+            }
+        });
+    };
+    Acts.prototype.captureScreenSyncShare = function(filename_, storage_, capture_, text_) {
+        if (!this.runtime.isCocoonJs)
+            return;
+        var storage_type = ["APP_STORAGE", "INTERNAL_STORAGE", "EXTERNAL_STORAGE", "TEMPORARY_STORAGE"][storage_];
+        var gallery = false;
+        url = Cocoon.Utils.captureScreen(filename_, storage_type, capture_, gallery);
+        Cocoon.Share.share({
+            message: text_,
+            image: url
+        }, function(activity, completed, error) {
+            if (completed) {
+                self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onShareSyncComplete, self);
+            } else {
+                self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onShareSyncFail, self);
+                console.log(error);
+            }
+        });
+    };
+    Acts.prototype.showWebdialog = function(url_){
+        dialog = new Cocoon.Widget.WebDialog();
+        dialog.show(url_, function(){
+            console.log("The user has closed the dialog!");
+            self.runtime.trigger(cr.plugins_.Cocoon_Canvasplus.prototype.cnds.onWebdialogUserClose, self);
+        });
+    };
+    Acts.prototype.closeWebdialog = function(){
+        dialog.close();
+    };
+    Acts.prototype.getDeviceInfo = function(){
+        device_info = Cocoon.Device.getDeviceInfo();
+    };
+    pluginProto.acts = new Acts();
+    /**
+     * Expressions
+     */
+    function Exps() {};
+    Exps.prototype.InputText = function(ret) {
+        ret.set_string(input_text);
+    };
+    Exps.prototype.CaptureScreenSync = function(ret) {
+        ret.set_string(capture_screen_sync);
+    };
+    Exps.prototype.CaptureScreenAsync = function(ret) {
+        ret.set_string(capture_screen_async);
+    };
+    Exps.prototype.DeviceOS = function(ret) {
+        ret.set_string(device_info.os);
+    };
+    Exps.prototype.DeviceVersion = function(ret) {
+        ret.set_string(device_info.version);
+    };
+    Exps.prototype.DeviceDPI = function(ret) {
+        ret.set_string(device_info.dpi);
+    };
+    Exps.prototype.DeviceBrand = function(ret) {
+        ret.set_string(device_info.brand);
+    };
+    Exps.prototype.DeviceModel = function(ret) {
+        ret.set_string(device_info.model);
+    };
+    Exps.prototype.DevicePlatformId = function(ret) {
+        ret.set_string(device_info.platformId);
+    };
+    pluginProto.exps = new Exps();
+}());
 ;
 ;
 cr.plugins_.Keyboard = function(runtime)
@@ -23146,6 +23343,170 @@ cr.behaviors.Flash = function(runtime)
 }());
 ;
 ;
+cr.behaviors.Pin = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var behaviorProto = cr.behaviors.Pin.prototype;
+	behaviorProto.Type = function(behavior, objtype)
+	{
+		this.behavior = behavior;
+		this.objtype = objtype;
+		this.runtime = behavior.runtime;
+	};
+	var behtypeProto = behaviorProto.Type.prototype;
+	behtypeProto.onCreate = function()
+	{
+	};
+	behaviorProto.Instance = function(type, inst)
+	{
+		this.type = type;
+		this.behavior = type.behavior;
+		this.inst = inst;				// associated object instance to modify
+		this.runtime = type.runtime;
+	};
+	var behinstProto = behaviorProto.Instance.prototype;
+	behinstProto.onCreate = function()
+	{
+		this.pinObject = null;
+		this.pinObjectUid = -1;		// for loading
+		this.pinAngle = 0;
+		this.pinDist = 0;
+		this.myStartAngle = 0;
+		this.theirStartAngle = 0;
+		this.lastKnownAngle = 0;
+		this.mode = 0;				// 0 = position & angle; 1 = position; 2 = angle; 3 = rope; 4 = bar
+		var self = this;
+		if (!this.recycled)
+		{
+			this.myDestroyCallback = (function(inst) {
+													self.onInstanceDestroyed(inst);
+												});
+		}
+		this.runtime.addDestroyCallback(this.myDestroyCallback);
+	};
+	behinstProto.saveToJSON = function ()
+	{
+		return {
+			"uid": this.pinObject ? this.pinObject.uid : -1,
+			"pa": this.pinAngle,
+			"pd": this.pinDist,
+			"msa": this.myStartAngle,
+			"tsa": this.theirStartAngle,
+			"lka": this.lastKnownAngle,
+			"m": this.mode
+		};
+	};
+	behinstProto.loadFromJSON = function (o)
+	{
+		this.pinObjectUid = o["uid"];		// wait until afterLoad to look up
+		this.pinAngle = o["pa"];
+		this.pinDist = o["pd"];
+		this.myStartAngle = o["msa"];
+		this.theirStartAngle = o["tsa"];
+		this.lastKnownAngle = o["lka"];
+		this.mode = o["m"];
+	};
+	behinstProto.afterLoad = function ()
+	{
+		if (this.pinObjectUid === -1)
+			this.pinObject = null;
+		else
+		{
+			this.pinObject = this.runtime.getObjectByUID(this.pinObjectUid);
+;
+		}
+		this.pinObjectUid = -1;
+	};
+	behinstProto.onInstanceDestroyed = function (inst)
+	{
+		if (this.pinObject == inst)
+			this.pinObject = null;
+	};
+	behinstProto.onDestroy = function()
+	{
+		this.pinObject = null;
+		this.runtime.removeDestroyCallback(this.myDestroyCallback);
+	};
+	behinstProto.tick = function ()
+	{
+	};
+	behinstProto.tick2 = function ()
+	{
+		if (!this.pinObject)
+			return;
+		if (this.lastKnownAngle !== this.inst.angle)
+			this.myStartAngle = cr.clamp_angle(this.myStartAngle + (this.inst.angle - this.lastKnownAngle));
+		var newx = this.inst.x;
+		var newy = this.inst.y;
+		if (this.mode === 3 || this.mode === 4)		// rope mode or bar mode
+		{
+			var dist = cr.distanceTo(this.inst.x, this.inst.y, this.pinObject.x, this.pinObject.y);
+			if ((dist > this.pinDist) || (this.mode === 4 && dist < this.pinDist))
+			{
+				var a = cr.angleTo(this.pinObject.x, this.pinObject.y, this.inst.x, this.inst.y);
+				newx = this.pinObject.x + Math.cos(a) * this.pinDist;
+				newy = this.pinObject.y + Math.sin(a) * this.pinDist;
+			}
+		}
+		else
+		{
+			newx = this.pinObject.x + Math.cos(this.pinObject.angle + this.pinAngle) * this.pinDist;
+			newy = this.pinObject.y + Math.sin(this.pinObject.angle + this.pinAngle) * this.pinDist;
+		}
+		var newangle = cr.clamp_angle(this.myStartAngle + (this.pinObject.angle - this.theirStartAngle));
+		this.lastKnownAngle = newangle;
+		if ((this.mode === 0 || this.mode === 1 || this.mode === 3 || this.mode === 4)
+			&& (this.inst.x !== newx || this.inst.y !== newy))
+		{
+			this.inst.x = newx;
+			this.inst.y = newy;
+			this.inst.set_bbox_changed();
+		}
+		if ((this.mode === 0 || this.mode === 2) && (this.inst.angle !== newangle))
+		{
+			this.inst.angle = newangle;
+			this.inst.set_bbox_changed();
+		}
+	};
+	function Cnds() {};
+	Cnds.prototype.IsPinned = function ()
+	{
+		return !!this.pinObject;
+	};
+	behaviorProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.Pin = function (obj, mode_)
+	{
+		if (!obj)
+			return;
+		var otherinst = obj.getFirstPicked(this.inst);
+		if (!otherinst)
+			return;
+		this.pinObject = otherinst;
+		this.pinAngle = cr.angleTo(otherinst.x, otherinst.y, this.inst.x, this.inst.y) - otherinst.angle;
+		this.pinDist = cr.distanceTo(otherinst.x, otherinst.y, this.inst.x, this.inst.y);
+		this.myStartAngle = this.inst.angle;
+		this.lastKnownAngle = this.inst.angle;
+		this.theirStartAngle = otherinst.angle;
+		this.mode = mode_;
+	};
+	Acts.prototype.Unpin = function ()
+	{
+		this.pinObject = null;
+	};
+	behaviorProto.acts = new Acts();
+	function Exps() {};
+	Exps.prototype.PinnedUID = function (ret)
+	{
+		ret.set_int(this.pinObject ? this.pinObject.uid : -1);
+	};
+	behaviorProto.exps = new Exps();
+}());
+;
+;
 cr.behaviors.Platform = function(runtime)
 {
 	this.runtime = runtime;
@@ -24497,6 +24858,117 @@ cr.behaviors.Sin = function(runtime)
 }());
 ;
 ;
+cr.behaviors.scrollto = function(runtime)
+{
+	this.runtime = runtime;
+	this.shakeMag = 0;
+	this.shakeStart = 0;
+	this.shakeEnd = 0;
+	this.shakeMode = 0;
+};
+(function ()
+{
+	var behaviorProto = cr.behaviors.scrollto.prototype;
+	behaviorProto.Type = function(behavior, objtype)
+	{
+		this.behavior = behavior;
+		this.objtype = objtype;
+		this.runtime = behavior.runtime;
+	};
+	var behtypeProto = behaviorProto.Type.prototype;
+	behtypeProto.onCreate = function()
+	{
+	};
+	behaviorProto.Instance = function(type, inst)
+	{
+		this.type = type;
+		this.behavior = type.behavior;
+		this.inst = inst;				// associated object instance to modify
+		this.runtime = type.runtime;
+	};
+	var behinstProto = behaviorProto.Instance.prototype;
+	behinstProto.onCreate = function()
+	{
+		this.enabled = (this.properties[0] !== 0);
+	};
+	behinstProto.saveToJSON = function ()
+	{
+		return {
+			"smg": this.behavior.shakeMag,
+			"ss": this.behavior.shakeStart,
+			"se": this.behavior.shakeEnd,
+			"smd": this.behavior.shakeMode
+		};
+	};
+	behinstProto.loadFromJSON = function (o)
+	{
+		this.behavior.shakeMag = o["smg"];
+		this.behavior.shakeStart = o["ss"];
+		this.behavior.shakeEnd = o["se"];
+		this.behavior.shakeMode = o["smd"];
+	};
+	behinstProto.tick = function ()
+	{
+	};
+	function getScrollToBehavior(inst)
+	{
+		var i, len, binst;
+		for (i = 0, len = inst.behavior_insts.length; i < len; ++i)
+		{
+			binst = inst.behavior_insts[i];
+			if (binst.behavior instanceof cr.behaviors.scrollto)
+				return binst;
+		}
+		return null;
+	};
+	behinstProto.tick2 = function ()
+	{
+		if (!this.enabled)
+			return;
+		var all = this.behavior.my_instances.valuesRef();
+		var sumx = 0, sumy = 0;
+		var i, len, binst, count = 0;
+		for (i = 0, len = all.length; i < len; i++)
+		{
+			binst = getScrollToBehavior(all[i]);
+			if (!binst || !binst.enabled)
+				continue;
+			sumx += all[i].x;
+			sumy += all[i].y;
+			++count;
+		}
+		var layout = this.inst.layer.layout;
+		var now = this.runtime.kahanTime.sum;
+		var offx = 0, offy = 0;
+		if (now >= this.behavior.shakeStart && now < this.behavior.shakeEnd)
+		{
+			var mag = this.behavior.shakeMag * Math.min(this.runtime.timescale, 1);
+			if (this.behavior.shakeMode === 0)
+				mag *= 1 - (now - this.behavior.shakeStart) / (this.behavior.shakeEnd - this.behavior.shakeStart);
+			var a = Math.random() * Math.PI * 2;
+			var d = Math.random() * mag;
+			offx = Math.cos(a) * d;
+			offy = Math.sin(a) * d;
+		}
+		layout.scrollToX(sumx / count + offx);
+		layout.scrollToY(sumy / count + offy);
+	};
+	function Acts() {};
+	Acts.prototype.Shake = function (mag, dur, mode)
+	{
+		this.behavior.shakeMag = mag;
+		this.behavior.shakeStart = this.runtime.kahanTime.sum;
+		this.behavior.shakeEnd = this.behavior.shakeStart + dur;
+		this.behavior.shakeMode = mode;
+	};
+	Acts.prototype.SetEnabled = function (e)
+	{
+		this.enabled = (e !== 0);
+	};
+	behaviorProto.acts = new Acts();
+}());
+;
+;
 cr.behaviors.solid = function(runtime)
 {
 	this.runtime = runtime;
@@ -24542,82 +25014,10 @@ cr.behaviors.solid = function(runtime)
 	};
 	behaviorProto.acts = new Acts();
 }());
-;
-;
-cr.behaviors.wrap = function(runtime)
-{
-	this.runtime = runtime;
-};
-(function ()
-{
-	var behaviorProto = cr.behaviors.wrap.prototype;
-	behaviorProto.Type = function(behavior, objtype)
-	{
-		this.behavior = behavior;
-		this.objtype = objtype;
-		this.runtime = behavior.runtime;
-	};
-	var behtypeProto = behaviorProto.Type.prototype;
-	behtypeProto.onCreate = function()
-	{
-	};
-	behaviorProto.Instance = function(type, inst)
-	{
-		this.type = type;
-		this.behavior = type.behavior;
-		this.inst = inst;				// associated object instance to modify
-		this.runtime = type.runtime;
-	};
-	var behinstProto = behaviorProto.Instance.prototype;
-	behinstProto.onCreate = function()
-	{
-		this.mode = this.properties[0];		// 0 = wrap to layout, 1 = wrap to viewport
-	};
-	behinstProto.tick = function ()
-	{
-		var inst = this.inst;
-		inst.update_bbox();
-		var bbox = inst.bbox;
-		var layer = inst.layer;
-		var layout = layer.layout;
-		var lbound = 0, rbound = 0, tbound = 0, bbound = 0;
-		if (this.mode === 0)
-		{
-			rbound = layout.width;
-			bbound = layout.height;
-		}
-		else
-		{
-			lbound = layer.viewLeft;
-			rbound = layer.viewRight;
-			tbound = layer.viewTop;
-			bbound = layer.viewBottom;
-		}
-		if (bbox.right < lbound)
-		{
-			inst.x = (rbound - 1) + (inst.x - bbox.left);
-			inst.set_bbox_changed();
-		}
-		else if (bbox.left > rbound)
-		{
-			inst.x = (lbound + 1) - (bbox.right - inst.x);
-			inst.set_bbox_changed();
-		}
-		else if (bbox.bottom < tbound)
-		{
-			inst.y = (bbound - 1) + (inst.y - bbox.top);
-			inst.set_bbox_changed();
-		}
-		else if (bbox.top > bbound)
-		{
-			inst.y = (tbound + 1) - (bbox.bottom - inst.y);
-			inst.set_bbox_changed();
-		}
-	};
-}());
 cr.getObjectRefTable = function () { return [
-	cr.plugins_.Audio,
 	cr.plugins_.Browser,
+	cr.plugins_.Audio,
+	cr.plugins_.Cocoon_Canvasplus,
 	cr.plugins_.Keyboard,
 	cr.plugins_.Mouse,
 	cr.plugins_.Sprite,
@@ -24625,74 +25025,112 @@ cr.getObjectRefTable = function () { return [
 	cr.plugins_.TiledBg,
 	cr.plugins_.Touch,
 	cr.plugins_.WebStorage,
-	cr.behaviors.Rotate,
 	cr.behaviors.Bullet,
-	cr.behaviors.Platform,
-	cr.behaviors.Flash,
-	cr.behaviors.solid,
-	cr.behaviors.wrap,
+	cr.behaviors.Rotate,
 	cr.behaviors.Fade,
 	cr.behaviors.Sin,
+	cr.behaviors.Pin,
+	cr.behaviors.Flash,
+	cr.behaviors.Platform,
+	cr.behaviors.scrollto,
+	cr.behaviors.solid,
 	cr.system_object.prototype.cnds.OnLayoutStart,
-	cr.system_object.prototype.acts.SetGroupActive,
-	cr.system_object.prototype.acts.SetVar,
-	cr.system_object.prototype.acts.SetTimescale,
-	cr.system_object.prototype.acts.CreateObject,
+	cr.behaviors.Pin.prototype.acts.Pin,
+	cr.plugins_.Sprite.prototype.acts.SetAnimFrame,
+	cr.system_object.prototype.exps.round,
 	cr.system_object.prototype.exps.random,
-	cr.plugins_.Sprite.prototype.acts.SetY,
-	cr.plugins_.Spritefont2.prototype.acts.SetY,
-	cr.plugins_.WebStorage.prototype.cnds.LocalStorageExists,
-	cr.plugins_.WebStorage.prototype.exps.LocalValue,
-	cr.plugins_.Spritefont2.prototype.acts.SetText,
-	cr.system_object.prototype.cnds.EveryTick,
+	cr.system_object.prototype.acts.SetVar,
 	cr.plugins_.Sprite.prototype.acts.SetPos,
-	cr.plugins_.Sprite.prototype.exps.X,
-	cr.plugins_.Sprite.prototype.exps.Y,
+	cr.plugins_.Spritefont2.prototype.acts.SetPos,
+	cr.plugins_.Sprite.prototype.acts.SetY,
 	cr.system_object.prototype.cnds.IsGroupActive,
 	cr.plugins_.Touch.prototype.cnds.OnTouchObject,
-	cr.behaviors.Platform.prototype.acts.SimulateControl,
-	cr.plugins_.Keyboard.prototype.cnds.OnKey,
-	cr.behaviors.Platform.prototype.cnds.IsOnFloor,
-	cr.plugins_.Sprite.prototype.cnds.OnAnimFinished,
-	cr.plugins_.Sprite.prototype.acts.SetAnim,
-	cr.system_object.prototype.cnds.Every,
-	cr.system_object.prototype.acts.AddVar,
+	cr.plugins_.Keyboard.prototype.cnds.OnAnyKey,
+	cr.behaviors.Sin.prototype.cnds.IsActive,
 	cr.system_object.prototype.cnds.CompareVar,
-	cr.plugins_.Sprite.prototype.acts.Spawn,
-	cr.system_object.prototype.acts.SubVar,
-	cr.plugins_.Sprite.prototype.cnds.IsOutsideLayout,
-	cr.plugins_.Sprite.prototype.acts.Destroy,
-	cr.plugins_.Sprite.prototype.cnds.OnCollision,
-	cr.plugins_.Sprite.prototype.acts.SetCollisions,
+	cr.plugins_.Audio.prototype.acts.Play,
 	cr.behaviors.Fade.prototype.acts.StartFade,
-	cr.behaviors.Bullet.prototype.acts.SetSpeed,
-	cr.plugins_.Sprite.prototype.acts.StopAnim,
+	cr.behaviors.Sin.prototype.acts.SetActive,
+	cr.plugins_.Sprite.prototype.cnds.OnDestroyed,
+	cr.plugins_.Sprite.prototype.acts.SetAnim,
+	cr.system_object.prototype.cnds.EveryTick,
+	cr.plugins_.Spritefont2.prototype.acts.SetText,
+	cr.behaviors.Bullet.prototype.acts.SetEnabled,
+	cr.plugins_.Sprite.prototype.exps.Y,
+	cr.plugins_.Sprite.prototype.cnds.IsBoolInstanceVarSet,
+	cr.system_object.prototype.acts.AddVar,
+	cr.system_object.prototype.acts.SetTimescale,
+	cr.system_object.prototype.cnds.Every,
+	cr.system_object.prototype.acts.SubVar,
+	cr.plugins_.Sprite.prototype.cnds.OnAnyAnimFinished,
+	cr.plugins_.Sprite.prototype.acts.Destroy,
+	cr.behaviors.Platform.prototype.cnds.IsOnFloor,
+	cr.plugins_.Sprite.prototype.cnds.IsAnimPlaying,
+	cr.behaviors.Platform.prototype.acts.SimulateControl,
+	cr.behaviors.Platform.prototype.acts.SetMaxSpeed,
+	cr.behaviors.Platform.prototype.exps.MaxSpeed,
+	cr.plugins_.Sprite.prototype.cnds.OnCollision,
+	cr.system_object.prototype.acts.Wait,
+	cr.plugins_.Sprite.prototype.acts.SetBoolInstanceVar,
+	cr.plugins_.Sprite.prototype.acts.Spawn,
+	cr.plugins_.Sprite.prototype.cnds.OnAnimFinished,
+	cr.plugins_.Sprite.prototype.cnds.CompareX,
+	cr.behaviors.scrollto.prototype.acts.Shake,
+	cr.behaviors.Flash.prototype.acts.Flash,
+	cr.system_object.prototype.acts.CreateObject,
+	cr.system_object.prototype.exps.viewportright,
+	cr.system_object.prototype.exps.viewportbottom,
+	cr.plugins_.WebStorage.prototype.acts.StoreLocal,
+	cr.system_object.prototype.acts.SetGroupActive,
+	cr.system_object.prototype.acts.WaitForSignal,
+	cr.system_object.prototype.acts.GoToLayout,
+	cr.plugins_.Sprite.prototype.acts.MoveToBottom,
+	cr.plugins_.Sprite.prototype.exps.X,
+	cr.plugins_.Sprite.prototype.cnds.CompareFrame,
+	cr.plugins_.Sprite.prototype.acts.SetInstanceVar,
+	cr.plugins_.Sprite.prototype.cnds.CompareY,
 	cr.plugins_.TiledBg.prototype.cnds.CompareX,
 	cr.plugins_.TiledBg.prototype.exps.Width,
 	cr.plugins_.TiledBg.prototype.acts.SetX,
 	cr.plugins_.TiledBg.prototype.exps.X,
-	cr.system_object.prototype.exps.layoutwidth,
-	cr.plugins_.Sprite.prototype.cnds.OnCreated,
-	cr.plugins_.Sprite.prototype.acts.SetAnimFrame,
-	cr.behaviors.Flash.prototype.acts.Flash,
-	cr.behaviors.Fade.prototype.cnds.OnFadeOutEnd,
-	cr.system_object.prototype.acts.Wait,
-	cr.plugins_.WebStorage.prototype.acts.StoreLocal,
-	cr.system_object.prototype.exps.round,
+	cr.plugins_.WebStorage.prototype.cnds.LocalStorageExists,
+	cr.plugins_.WebStorage.prototype.exps.LocalValue,
+	cr.plugins_.Sprite.prototype.acts.SetX,
 	cr.system_object.prototype.exps.loadingprogress,
-	cr.plugins_.Sprite.prototype.acts.SetWidth,
+	cr.system_object.prototype.cnds.Compare,
 	cr.system_object.prototype.cnds.OnLoadFinished,
 	cr.plugins_.Audio.prototype.acts.Preload,
-	cr.plugins_.Audio.prototype.acts.Play,
-	cr.system_object.prototype.acts.GoToLayout,
-	cr.plugins_.Sprite.prototype.cnds.OnDestroyed,
-	cr.plugins_.Browser.prototype.acts.GoToURL,
-	cr.system_object.prototype.acts.RestartLayout,
-	cr.plugins_.Audio.prototype.acts.Stop,
+	cr.system_object.prototype.acts.SetLayerOpacity,
+	cr.plugins_.Spritefont2.prototype.cnds.CompareInstanceVar,
+	cr.plugins_.Sprite.prototype.acts.SetWidth,
+	cr.system_object.prototype.exps.distance,
+	cr.plugins_.Touch.prototype.cnds.IsTouchingObject,
+	cr.plugins_.Touch.prototype.exps.X,
+	cr.plugins_.Touch.prototype.exps.Y,
+	cr.system_object.prototype.exps.clamp,
+	cr.system_object.prototype.exps.log10,
+	cr.plugins_.Audio.prototype.acts.SetVolume,
 	cr.system_object.prototype.cnds.Else,
+	cr.system_object.prototype.acts.RestartLayout,
+	cr.plugins_.Browser.prototype.acts.RequestFullScreen,
+	cr.plugins_.Sprite.prototype.acts.StartAnim,
+	cr.plugins_.Browser.prototype.acts.CancelFullScreen,
+	cr.plugins_.Browser.prototype.acts.GoToURLWindow,
+	cr.plugins_.Cocoon_Canvasplus.prototype.cnds.isCanvasPlus,
+	cr.plugins_.Cocoon_Canvasplus.prototype.acts.exitApp,
+	cr.plugins_.Browser.prototype.acts.Close,
 	cr.plugins_.Mouse.prototype.cnds.IsButtonDown,
 	cr.plugins_.Mouse.prototype.acts.SetCursorSprite,
 	cr.plugins_.Mouse.prototype.cnds.IsOverObject,
-	cr.behaviors.Sin.prototype.acts.SetActive,
-	cr.plugins_.Sprite.prototype.acts.SetSize
+	cr.plugins_.Sprite.prototype.acts.SetSize,
+	cr.plugins_.Sprite.prototype.cnds.CompareAnimSpeed,
+	cr.plugins_.Sprite.prototype.acts.StopAnim,
+	cr.behaviors.Platform.prototype.acts.SetEnabled,
+	cr.system_object.prototype.cnds.TriggerOnce,
+	cr.system_object.prototype.acts.SetLayerScale,
+	cr.system_object.prototype.exps.lerp,
+	cr.system_object.prototype.exps.layeropacity,
+	cr.system_object.prototype.exps.layerscale,
+	cr.system_object.prototype.cnds.LayerCmpOpacity,
+	cr.system_object.prototype.acts.Signal
 ];};
